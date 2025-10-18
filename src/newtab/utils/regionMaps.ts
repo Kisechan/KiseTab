@@ -11,6 +11,14 @@ export const COUNTRY_MAP: Record<string, string> = {
   RU: '俄罗斯',
   IN: '印度',
   BR: '巴西',
+  SG: '新加坡',
+  TW: '中国台湾',
+  AR: '阿根廷',
+  TR: '土耳其',
+  KR: '韩国',
+  CA: '加拿大',
+  AU: '澳大利亚',
+  UA: '乌克兰',
 }
 
 export const PROVINCE_MAP: Record<string, string> = {

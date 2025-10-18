@@ -38,13 +38,20 @@ function setStatus(msg: string, type: string = 'success', timeout = 2000) {
 function getStoredKey(): Promise<string | null> {
   return new Promise((resolve) => {
     try {
-      if ((window as any).chrome?.storage?.local) {
-        ;(window as any).chrome.storage.local.get([STORAGE_KEY], (res: any) => {
+      const win: any = window as any;
+      if (win.chrome?.storage?.sync) {
+        win.chrome.storage.sync.get([STORAGE_KEY], (res: any) => {
           resolve(res?.[STORAGE_KEY] ?? null)
         })
-      } else {
-        resolve(localStorage.getItem(STORAGE_KEY))
+        return
       }
+      if (win.chrome?.storage?.local) {
+        win.chrome.storage.local.get([STORAGE_KEY], (res: any) => {
+          resolve(res?.[STORAGE_KEY] ?? null)
+        })
+        return
+      }
+      resolve(localStorage.getItem(STORAGE_KEY))
     } catch (e) {
       resolve(localStorage.getItem(STORAGE_KEY))
     }
@@ -60,12 +67,19 @@ async function save() {
   }
 
   try {
-    if ((window as any).chrome?.storage?.local) {
-      ;(window as any).chrome.storage.local.set({ [STORAGE_KEY]: key.value })
-    } else {
-      localStorage.setItem(STORAGE_KEY, key.value)
+    const win: any = window as any;
+    if (win.chrome?.storage?.sync) {
+      win.chrome.storage.sync.set({ [STORAGE_KEY]: key.value })
+      setStatus('已保存', 'success')
+      return
     }
-    setStatus('已保存', 'success')
+    if (win.chrome?.storage?.local) {
+      win.chrome.storage.local.set({ [STORAGE_KEY]: key.value })
+      setStatus('已保存', 'success')
+      return
+    }
+    localStorage.setItem(STORAGE_KEY, key.value)
+    setStatus('已保存（已使用回退存储）', 'success')
   } catch (e) {
     // fallback
     localStorage.setItem(STORAGE_KEY, key.value)

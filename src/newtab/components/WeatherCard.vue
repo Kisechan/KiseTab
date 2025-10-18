@@ -56,8 +56,6 @@ const coords = ref<{ lat: number; lon: number } | null>(null);
 // storage change listener reference so we can remove it on unmount
 let storageListener: ((changes: any, areaName: string) => void) | null = null;
 
-const geolocationMethod = ref('ip'); // 'ip' or 'permission'
-
 async function getGeolocationMethod() {
   try {
     const win: any = window as any;
@@ -76,17 +74,86 @@ async function getGeolocationMethod() {
 async function readApiKeyFromStorage() {
   try {
     const win: any = window as any;
-    if (win.chrome && win.chrome.storage && win.chrome.storage.local) {
-      return await new Promise<string>((resolve) => {
-        win.chrome.storage.local.get(["VITE_WEATHER_API_KEY"], (items: any) => {
-          resolve(items?.VITE_WEATHER_API_KEY || localStorage.getItem("VITE_WEATHER_API_KEY") || "");
+    if (win.chrome && win.chrome.storage) {
+      if (win.chrome.storage.sync) {
+        return await new Promise<string>((resolve) => {
+          win.chrome.storage.sync.get(["VITE_WEATHER_API_KEY"], (items: any) => {
+            resolve(items?.VITE_WEATHER_API_KEY || localStorage.getItem("VITE_WEATHER_API_KEY") || "");
+          });
         });
-      });
+      }
+      if (win.chrome.storage.local) {
+        return await new Promise<string>((resolve) => {
+          win.chrome.storage.local.get(["VITE_WEATHER_API_KEY"], (items: any) => {
+            resolve(items?.VITE_WEATHER_API_KEY || localStorage.getItem("VITE_WEATHER_API_KEY") || "");
+          });
+        });
+      }
     }
   } catch (e) {
     // ignore
   }
   return localStorage.getItem("VITE_WEATHER_API_KEY") || "";
+}
+
+const CACHE_KEY = 'weather_cache';
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 mins
+
+type WeatherCache = {
+  lat: number;
+  lon: number;
+  ts: number;
+  payload: {
+    temp: number;
+    condition: string;
+    icon: string | null;
+    iconUrl: string | null;
+    city: string;
+  };
+};
+
+async function readCache(): Promise<WeatherCache | null> {
+  try {
+    const win: any = window as any;
+    if (win.chrome && win.chrome.storage && win.chrome.storage.local) {
+      const res = await new Promise<any>((resolve) => {
+        win.chrome.storage.local.get([CACHE_KEY], (r: any) => resolve(r?.[CACHE_KEY] || null));
+      });
+      return res;
+    }
+  } catch (e) {
+    // ignore
+  }
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function writeCache(c: WeatherCache) {
+  try {
+    const win: any = window as any;
+    if (win.chrome && win.chrome.storage && win.chrome.storage.local) {
+      await new Promise<void>((resolve) => {
+        win.chrome.storage.local.set({ [CACHE_KEY]: c }, () => resolve());
+      });
+      return;
+    }
+  } catch (e) {
+    // ignore
+  }
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(c));
+  } catch (e) {
+    // ignore
+  }
+}
+
+function coordsMatch(aLat: number, aLon: number, bLat: number, bLon: number) {
+  const THRESH = 0.02; // ~2km tolerance
+  return Math.abs(aLat - bLat) <= THRESH && Math.abs(aLon - bLon) <= THRESH;
 }
 
 // 国家映射
@@ -100,6 +167,21 @@ function makeIconUrl(code: string) {
 async function fetchWeather(lat: number, lon: number) {
   // remember coords for subsequent refetches
   coords.value = { lat, lon };
+  // Check cache first
+  try {
+    const cached = await readCache();
+    if (cached && Date.now() - cached.ts < CACHE_TTL_MS && coordsMatch(lat, lon, cached.lat, cached.lon)) {
+      temp.value = cached.payload.temp;
+      condition.value = cached.payload.condition;
+      icon.value = cached.payload.icon;
+      iconUrl.value = cached.payload.iconUrl;
+      city.value = cached.payload.city;
+      loading.value = false;
+      return;
+    }
+  } catch (e) {
+
+  }
   if (!apiKey.value) {
     error.value = "未配置天气 API Key (请在扩展弹出窗口中设置)";
     loading.value = false;
@@ -179,6 +261,20 @@ async function fetchWeather(lat: number, lon: number) {
     }
 
     loading.value = false;
+
+    // write cache
+    try {
+      const payload = {
+        temp: temp.value,
+        condition: condition.value,
+        icon: icon.value,
+        iconUrl: iconUrl.value,
+        city: city.value,
+      };
+      await writeCache({ lat, lon, ts: Date.now(), payload });
+    } catch (e) {
+      // ignore cache write errors
+    }
   } catch (e: any) {
     if (e.name === "AbortError") return;
     error.value = e.message || String(e);
@@ -309,7 +405,7 @@ function retry() {
 
 <style scoped>
 .weather-card {
-  width: 160px;
+  width: 210px;
   padding: 12px 14px;
   border-radius: 12px;
   background: linear-gradient(

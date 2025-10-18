@@ -20,11 +20,16 @@ const STORAGE_KEY = 'geolocation_method';
 async function saveSetting() {
   const method = isIpBased.value ? 'ip' : 'permission';
   try {
-    if ((window as any).chrome?.storage?.local) {
-      await (window as any).chrome.storage.local.set({ [STORAGE_KEY]: method });
-    } else {
-      localStorage.setItem(STORAGE_KEY, method);
+    const win: any = window as any;
+    if (win.chrome?.storage?.sync) {
+      await win.chrome.storage.sync.set({ [STORAGE_KEY]: method });
+      return
     }
+    if (win.chrome?.storage?.local) {
+      await win.chrome.storage.local.set({ [STORAGE_KEY]: method });
+      return
+    }
+    localStorage.setItem(STORAGE_KEY, method);
   } catch (e) {
     console.error('Failed to save geolocation setting:', e);
   }
@@ -33,8 +38,12 @@ async function saveSetting() {
 onMounted(async () => {
   let method = 'ip'; // Default
   try {
-    if ((window as any).chrome?.storage?.local) {
-      const result = await (window as any).chrome.storage.local.get([STORAGE_KEY]);
+    const win: any = window as any;
+    if (win.chrome?.storage?.sync) {
+      const result = await win.chrome.storage.sync.get([STORAGE_KEY]);
+      method = result[STORAGE_KEY] || 'ip';
+    } else if (win.chrome?.storage?.local) {
+      const result = await win.chrome.storage.local.get([STORAGE_KEY]);
       method = result[STORAGE_KEY] || 'ip';
     } else {
       method = localStorage.getItem(STORAGE_KEY) || 'ip';
