@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import ApiKeyForm from './components/ApiKeyForm.vue'
 import GeolocationSettings from './components/GeolocationSettings.vue'
+import UpdateCheck from './components/UpdateCheck.vue'
 import { ref, onMounted } from 'vue'
 
 const repo = "https://github.com/KiseLab/KiseTab";
@@ -8,10 +9,12 @@ const repo = "https://github.com/KiseLab/KiseTab";
 const STORAGE_KEYS = {
   DEFAULT_CITY: 'kisetab_default_city',
   THEME: 'kisetab_theme',
+  UPDATE_CHECK: 'kisetab_update_check'
 }
 
 const defaultCity = ref('')
 const theme = ref('system')
+// update logic moved to UpdateCheck.vue
 
 async function readFromSync(key: string) {
   try {
@@ -24,27 +27,6 @@ async function readFromSync(key: string) {
     // ignore
   }
   return localStorage.getItem(key)
-}
-
-async function saveToSync(key: string, value: string) {
-  try {
-    const win: any = window as any
-    if (win.chrome && win.chrome.storage && win.chrome.storage.sync) {
-      await new Promise<void>((resolve) => win.chrome.storage.sync.set({ [key]: value }, () => resolve()))
-      return
-    }
-  } catch (e) {
-    // ignore
-  }
-  localStorage.setItem(key, value)
-}
-
-async function saveDefaultCity() {
-  await saveToSync(STORAGE_KEYS.DEFAULT_CITY, defaultCity.value)
-}
-
-async function saveTheme() {
-  await saveToSync(STORAGE_KEYS.THEME, theme.value)
 }
 
 onMounted(async () => {
@@ -74,6 +56,10 @@ onMounted(async () => {
       <GeolocationSettings />
     </div>
 
+    <div class="section">
+      <UpdateCheck />
+    </div>
+
     <div class="footer">
       <span><a :href="repo" target="_blank" class="footer-link">GitHub</a> | © KiseLab</span>
     </div>
@@ -99,5 +85,73 @@ onMounted(async () => {
 .row input, .row select { flex:1; padding:6px 8px; border-radius:8px; border:1px solid rgba(0,0,0,0.08) }
 .row button { padding:6px 10px; border-radius:8px; background:#4f46e5; color:white; border:none }
 .footer { margin-top:8px; font-size:12px; color: rgba(34, 34, 34, 0.55) }
+.update-banner {
+  background: #e6f7ff;
+  border: 1px solid #91d5ff;
+  color: #0050b3;
+  padding: 8px;
+  border-radius: 6px;
+  margin-top: 8px;
+  font-size: 13px;
+  text-align: center;
+}
+.toggle input {
+  margin-right: 6px;
+}
+
+/* setting row / toggle styles (match GeolocationSettings) */
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+}
+.label {
+  font-size: 13px;
+  color: var(--text-dark);
+  flex: 0 0 auto;
+}
+.toggle-switch-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.value {
+  font-size: 13px;
+  color: rgba(34,34,34,0.7);
+}
+.toggle-switch {
+  position: relative;
+  width: 44px;
+  height: 26px;
+}
+.toggle-switch input { display: none; }
+.toggle-switch .slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #ccc;
+  border-radius: 999px;
+  transition: background-color 0.2s;
+}
+.toggle-switch .slider:before {
+  content: '';
+  position: absolute;
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+  transition: transform 0.22s ease;
+}
+.toggle-switch input:checked + .slider {
+  background-color: #4f46e5;
+}
+.toggle-switch input:checked + .slider:before {
+  transform: translateX(18px);
+}
 </style>
 
